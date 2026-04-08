@@ -36,11 +36,15 @@ export class AuthService {
     
     await newUser.save();
     
-    // Retornar perfil público (sin el hash)
+    // Retornar perfil público y token de acceso
+    const payload = { sub: newUser._id, email: newUser.email };
     return {
-      _id: newUser._id,
-      email: newUser.email,
-      displayName: newUser.displayName,
+      access_token: this.jwtService.sign(payload),
+      user: {
+        _id: newUser._id,
+        email: newUser.email,
+        displayName: newUser.displayName,
+      }
     };
   }
 
