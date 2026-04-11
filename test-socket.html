@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Dokyuu Sockets Tester</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+    input, button { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+    #log { background: #1e1e1e; color: #0f0; padding: 10px; height: 300px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h2>Dokyuu Pizarra WSS Tester</h2>
+  
+  <div class="box">
+    <h3>1. Configurar Conexión</h3>
+    <input type="text" id="token" placeholder="Bearer eyJhbGciOiJIUzI1NiIsInR..." />
+    <input type="text" id="boardId" placeholder="ID MongoDB de la Pizarra (Ej: 64b1f...)" />
+    <button onclick="connect()">Conectar</button>
+  </div>
+
+  <div class="box" id="actions" style="display: none;">
+    <h3>2. Acciones del WebSocket</h3>
+    <button onclick="joinBoard()">Unirse a Room (joinBoard)</button>
+    <button onclick="emitCursor()">Emitir cursor:move</button>
+    <button onclick="emitUpdate()">Emitir update (Requiere permisos Host/Member)</button>
+  </div>
+
+  <div class="box">
+    <h3>Logs En Vivo</h3>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    let socket;
+    
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.innerHTML += `> ${new Date().toISOString().split('T')[1].split('.')[0]} : ${msg}\n`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function connect() {
+      const token = document.getElementById('token').value;
+      if(!token) return alert('Debes pegar tu Token (Bearer...) generado en Fase 2');
+
+      socket = io('http://localhost:3000', {
+        auth: { token },
+        transports: ['websocket']
+      });
+
+      socket.on('connect', () => {
+        log('Conectado al servidor WebSocket! ID: ' + socket.id);
+        document.getElementById('actions').style.display = 'block';
+      });
+
+      socket.on('connect_error', (err) => {
+        log('Error de conexión: ' + err.message);
+      });
+
+      socket.on('disconnect', () => log('Desconectado del servidor'));
+      
+      // Listeners Globales
+      socket.on('canvas:update', (data) => log('Recibido canvas:update -> ' + JSON.stringify(data)));
+      socket.on('cursor:move', (data) => log('Recibido cursor:move -> ' + JSON.stringify(data)));
+    }
+
+    function joinBoard() {
+      const boardId = document.getElementById('boardId').value;
+      socket.emit('joinBoard', { boardId }, (response) => {
+        log('Respuesta joinBoard: ' + JSON.stringify(response));
+      });
+      log(`Uniéndose a la sala ${boardId}...`);
+    }
+
+    function emitCursor() {
+      const boardId = document.getElementById('boardId').value;
+      const x = Math.floor(Math.random() * 500);
+      const y = Math.floor(Math.random() * 500);
+      socket.emit('cursor:move', { boardId, position: { x, y } });
+      log(`Emitido cursor:move a X:${x} Y:${y}`);
+    }
+
+    function emitUpdate() {
+      const boardId = document.getElementById('boardId').value;
+      socket.emit('canvas:update', { 
+        boardId, 
+        elements: [{ id: 'shape1', type: 'note', content: 'Holda Dokyuu!' }] 
+      }, (response) => {
+        if(response.error) log('ERROR:' + response.error);
+      });
+      log('Emitido canvas:update');
+    }
+  </script>
+</body>
+</html>

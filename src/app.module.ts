@@ -8,7 +8,7 @@ import { BoardsModule } from './boards/boards.module';
 import { MembersModule } from './members/members.module';
 import { CanvasModule } from './canvas/canvas.module';
 import { FilesModule } from './files/files.module';
-import { SocketGateway } from './socket/socket.gateway';
+import { SocketModule } from './socket/socket.module';
 
 @Module({
   imports: [
@@ -26,9 +26,10 @@ import { SocketGateway } from './socket/socket.gateway';
     BoardsModule, 
     MembersModule, 
     CanvasModule, 
-    FilesModule
+    FilesModule,
+    SocketModule
   ],
   controllers: [AppController],
-  providers: [AppService, SocketGateway],
+  providers: [AppService],
 })
 export class AppModule {}
