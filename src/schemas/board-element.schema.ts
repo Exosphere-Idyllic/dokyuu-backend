@@ -26,6 +26,15 @@ export class BoardElement extends Document {
   @Prop()
   color: string;
 
+  @Prop()
+  imageUrl: string; // URL de Cloudinary — solo para elements de type: 'image'
+
+  @Prop()
+  width: number; // Ancho del elemento imagen en px
+
+  @Prop()
+  height: number; // Alto del elemento imagen en px
+
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy: User | Types.ObjectId;
 }
