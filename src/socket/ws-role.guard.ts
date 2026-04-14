@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { BoardMember } from '../schemas/board-member.schema';
 
 @Injectable()
@@ -13,16 +13,28 @@ export class WsRoleGuard implements CanActivate {
     const client = context.switchToWs().getClient();
     const data = context.switchToWs().getData();
     
-    const boardId = data?.boardId || client.currentBoardId; 
+    const boardIdRaw = data?.boardId || client.currentBoardId; 
     const user = client.user;
 
-    if (!boardId || !user) {
+    if (!boardIdRaw || !user) {
       return false; 
     }
 
+    // CORRECCIÓN CRÍTICA: el schema almacena boardId y userId como Types.ObjectId.
+    // Si pasamos un string a findOne(), Mongoose no hace auto-conversión y la query
+    // devuelve null, haciendo que todos los usuarios sean rechazados.
+    let boardId: Types.ObjectId;
+    let userId: Types.ObjectId;
+    try {
+      boardId = new Types.ObjectId(boardIdRaw);
+      userId = new Types.ObjectId(user.sub);
+    } catch (e) {
+      throw new UnauthorizedException('boardId o userId con formato inválido');
+    }
+
     const member = await this.boardMemberModel.findOne({
-       boardId, 
-       userId: user.sub 
+       boardId,
+       userId,
     }).exec();
 
     if (!member) {

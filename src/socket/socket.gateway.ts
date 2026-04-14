@@ -18,11 +18,11 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   handleConnection(client: any) {
-    console.log(`[Sockets] Client connected: ${client.id}`);
+    console.log(`[Sockets] Cliente conectado: ${client.id}`);
   }
 
   handleDisconnect(client: any) {
-    console.log(`[Sockets] Client disconnected: ${client.id}`);
+    console.log(`[Sockets] Cliente desconectado: ${client.id} (sala: ${client.currentBoardId ?? 'ninguna'})`);
   }
 
   @UseGuards(WsAuthGuard)
@@ -31,33 +31,65 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: any, 
     @MessageBody() payload: { boardId: string }
   ) {
+    if (!payload?.boardId) {
+      return { success: false, message: 'boardId requerido' };
+    }
+
+    // Salir de sala anterior para evitar que el cliente reciba eventos duplicados
+    if (client.currentBoardId && client.currentBoardId !== payload.boardId) {
+      client.leave(client.currentBoardId);
+      console.log(`[Sockets] Cliente ${client.id} salió de sala ${client.currentBoardId}`);
+    }
+
     client.join(payload.boardId);
     client.currentBoardId = payload.boardId;
+
+    const roomSize = this.server.sockets.adapter.rooms.get(payload.boardId)?.size ?? 0;
+    console.log(`[Sockets] ${client.id} (${client.user?.email}) → tablero ${payload.boardId}. Usuarios en sala: ${roomSize}`);
+
     return { success: true, message: 'Unido a la sala exitosamente', boardId: payload.boardId };
   }
 
-  // Rutas protegidas para edición gráfica (excluye Readers en el RoleGuard)
+  // CORRECCIÓN: Ahora incluye WsRoleGuard para bloquear a los "readers"
   @UseGuards(WsAuthGuard, WsRoleGuard)
   @SubscribeMessage('canvas:update')
   handleCanvasUpdate(
     @ConnectedSocket() client: any,
     @MessageBody() payload: { boardId: string; elements: any[] }
   ) {
-    // Si WsRoleGuard pasa, mandamos la actualización al cuarto excluyendo al que envió
-    client.broadcast.to(payload.boardId).emit('canvas:update', payload.elements);
+    if (!payload?.boardId || !payload?.elements) {
+      console.warn(`[Sockets] canvas:update sin payload válido de ${client.id}`);
+      return;
+    }
+
+    // Verificar que el cliente está en la sala; si no, unirlo automáticamente
+    // Esto cubre el caso donde joinBoard no se completó antes de la primera edición
+    const rooms = client.rooms as Set<string>;
+    if (!rooms.has(payload.boardId)) {
+      console.warn(`[Sockets] ${client.id} no estaba en sala ${payload.boardId}. Uniéndolo...`);
+      client.join(payload.boardId);
+      client.currentBoardId = payload.boardId;
+    }
+
+    console.log(`[Sockets] canvas:update | sala: ${payload.boardId} | user: ${client.user?.email} | elementos: ${payload.elements.length}`);
+
+    // client.to() es equivalente a client.broadcast.to() — envía a todos EXCEPTO al emisor
+    client.to(payload.boardId).emit('canvas:update', payload.elements);
   }
 
-  @UseGuards(WsAuthGuard, WsRoleGuard)
+  @UseGuards(WsAuthGuard)
   @SubscribeMessage('cursor:move')
   handleCursorMove(
     @ConnectedSocket() client: any,
     @MessageBody() payload: { boardId: string; position: {x: number, y: number} }
   ) {
-    client.broadcast.to(payload.boardId).emit('cursor:move', { 
+    // Null-safe: no crashear si client.user no está definido
+    if (!payload?.boardId || !client.user) return;
+
+    client.to(payload.boardId).emit('cursor:move', { 
         userId: client.user.sub, 
         email: client.user.email,
         position: payload.position 
     });
   }
 }
-

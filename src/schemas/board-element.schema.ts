@@ -3,27 +3,30 @@ import { Document, Types } from 'mongoose';
 import { Board } from './board.schema';
 import { User } from './user.schema';
 
-@Schema({ timestamps: { createdAt: true, updatedAt: false } })
+@Schema({ timestamps: { createdAt: true, updatedAt: false }, strict: false })
 export class BoardElement extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Board', required: true })
   boardId: Board | Types.ObjectId;
 
-  @Prop({ required: true })
-  type: string; // 'shape' | 'image' | 'note' | 'comment'
+  @Prop()
+  id: string;
 
-  @Prop({ type: Object, required: true })
-  position: { x: number; y: number };
-
-  @Prop({ type: Object })
-  size: { w: number; h: number };
+  @Prop()
+  type: string;
 
   @Prop()
   content: string;
 
-  @Prop({ type: Object })
-  style: Record<string, any>;
+  @Prop()
+  x: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop()
+  y: number;
+
+  @Prop()
+  color: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy: User | Types.ObjectId;
 }
 

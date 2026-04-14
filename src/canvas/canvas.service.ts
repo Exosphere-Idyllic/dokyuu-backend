@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { BoardElement } from '../schemas/board-element.schema';
 import { BoardMember } from '../schemas/board-member.schema';
 
@@ -12,29 +12,33 @@ export class CanvasService {
   ) {}
 
   async getBoardElements(boardId: string, userId: string) {
-    // Validar acceso básico de lectura
-    const member = await this.boardMemberModel.findOne({ boardId, userId }).exec();
+    // CORRECCIÓN: Convertir strings a ObjectId para que Mongoose encuentre los documentos
+    const boardObjId = new Types.ObjectId(boardId);
+    const userObjId = new Types.ObjectId(userId);
+
+    const member = await this.boardMemberModel.findOne({ boardId: boardObjId, userId: userObjId }).exec();
     if (!member) throw new UnauthorizedException('No tienes acceso a esta pizarra');
 
-    return this.boardElementModel.find({ boardId }).exec();
+    return this.boardElementModel.find({ boardId: boardObjId }).exec();
   }
 
   async saveElements(boardId: string, userId: string, elements: any[]) {
-    // Carga debounced de elementos. Validar rol de escritura
-    const member = await this.boardMemberModel.findOne({ boardId, userId }).exec();
+    const boardObjId = new Types.ObjectId(boardId);
+    const userObjId = new Types.ObjectId(userId);
+
+    const member = await this.boardMemberModel.findOne({ boardId: boardObjId, userId: userObjId }).exec();
     if (!member || member.role === 'reader') {
       throw new UnauthorizedException('Solo hosts y miembros pueden guardar el canvas');
     }
 
-    // Estrategia simple: reemplazar todo en esta versión o usar upsert individualmente
-    // Aquí limpiamos los viejos y guardamos el array consolidado por simplicidad del MVP
-    await this.boardElementModel.deleteMany({ boardId }).exec();
+    await this.boardElementModel.deleteMany({ boardId: boardObjId }).exec();
 
-    // Re-mapear para inyectar metadata de bd
+    // CORRECCIÓN: preservar el createdBy original de cada elemento.
+    // No sobrescribir todos con el userId del guardador — eso borraba la auditoría de autoría.
     const preparedElements = elements.map(el => ({
       ...el,
-      boardId,
-      createdBy: userId, // o mantener su creador original si se enviara en 'el'
+      boardId: boardObjId,
+      createdBy: el.createdBy ? new Types.ObjectId(el.createdBy) : userObjId,
     }));
 
     if (preparedElements.length > 0) {
