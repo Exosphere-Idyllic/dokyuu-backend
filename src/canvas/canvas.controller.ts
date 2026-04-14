@@ -9,15 +9,17 @@ export class CanvasController {
 
   @Get(':boardId/elements')
   async getElements(@Request() req, @Param('boardId') boardId: string) {
-    return this.canvasService.getBoardElements(boardId, req.user.sub);
+    // CORRECCIÓN: JwtStrategy.validate() devuelve el documento Mongoose completo.
+    // La propiedad es _id, no sub. sub solo existe en el payload del JWT (usado en WsAuthGuard).
+    return this.canvasService.getBoardElements(boardId, req.user._id.toString());
   }
 
   @Put(':boardId/elements')
   async saveElements(
-    @Request() req, 
-    @Param('boardId') boardId: string, 
+    @Request() req,
+    @Param('boardId') boardId: string,
     @Body('elements') elements: any[]
   ) {
-    return this.canvasService.saveElements(boardId, req.user.sub, elements || []);
+    return this.canvasService.saveElements(boardId, req.user._id.toString(), elements || []);
   }
 }
