@@ -5,6 +5,8 @@ import { nanoid } from 'nanoid';
 import { Board } from '../schemas/board.schema';
 import { BoardMember } from '../schemas/board-member.schema';
 import { CreateBoardDto } from './dto/create-board.dto';
+import { UpdateBoardDto } from './dto/update-board.dto';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 
 @Injectable()
 export class BoardsService {
@@ -62,5 +64,26 @@ export class BoardsService {
         myRole: matchRole ? matchRole.role : 'none',
       };
     });
+  }
+
+  async update(boardId: string, userId: string | Types.ObjectId, updateData: UpdateBoardDto) {
+    const board = await this.boardModel.findById(boardId);
+    if (!board) {
+      throw new NotFoundException('Pizarra no encontrada');
+    }
+    
+    // Check if user is the creator (host)
+    if (String(board.createdBy) !== String(userId)) {
+      throw new UnauthorizedException('Solo el propietario puede editar esta pizarra');
+    }
+
+    if (updateData.name !== undefined) {
+      board.name = updateData.name;
+    }
+    if (updateData.description !== undefined) {
+      board.description = updateData.description;
+    }
+
+    return await board.save();
   }
 }
