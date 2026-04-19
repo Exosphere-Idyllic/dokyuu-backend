@@ -24,7 +24,11 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleDisconnect(client: any) {
     console.log(`[Sockets] Cliente desconectado: ${client.id} (sala: ${client.currentBoardId ?? 'ninguna'})`);
     if (client.currentBoardId && client.userId) {
-      this.server.to(client.currentBoardId).emit('user:left', { userId: client.userId, email: client.userEmail });
+      this.server.to(client.currentBoardId).emit('user:left', { 
+        userId: client.userId, 
+        email: client.userEmail,
+        displayName: client.userDisplayName
+      });
     }
   }
 
@@ -48,12 +52,19 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.currentBoardId = payload.boardId;
     client.userId = client.user?.sub;
     client.userEmail = client.user?.email;
+    client.userDisplayName = client.user?.displayName;
+    client.userCursorColor = client.user?.cursorColor;
 
     const roomSize = this.server.sockets.adapter.rooms.get(payload.boardId)?.size ?? 0;
     console.log(`[Sockets] ${client.id} (${client.user?.email}) → tablero ${payload.boardId}. Usuarios en sala: ${roomSize}`);
 
     // Emit to others in the room
-    client.to(payload.boardId).emit('user:joined', { userId: client.userId, email: client.userEmail });
+    client.to(payload.boardId).emit('user:joined', { 
+      userId: client.userId, 
+      email: client.userEmail,
+      displayName: client.userDisplayName,
+      cursorColor: client.userCursorColor
+    });
 
     return { success: true, message: 'Unido a la sala exitosamente', boardId: payload.boardId };
   }
@@ -97,6 +108,8 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.to(payload.boardId).emit('cursor:move', { 
         userId: client.user.sub, 
         email: client.user.email,
+        displayName: client.user.displayName,
+        cursorColor: client.user.cursorColor,
         position: payload.position 
     });
   }

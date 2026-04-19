@@ -9,6 +9,15 @@ import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
+  private getRandomColor(): string {
+    const letters = '0123456789ABCDEF';
+    let color = '#';
+    for (let i = 0; i < 6; i++) {
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+  }
+
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<User>,
     private readonly jwtService: JwtService,
@@ -27,23 +36,32 @@ export class AuthService {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const cursorColor = this.getRandomColor();
+
     // Crear y guardar el nuevo usuario
     const newUser = new this.userModel({
       email,
       displayName,
       passwordHash,
+      cursorColor,
     });
     
     await newUser.save();
     
     // Retornar perfil público y token de acceso
-    const payload = { sub: newUser._id, email: newUser.email };
+    const payload = { 
+      sub: newUser._id, 
+      email: newUser.email, 
+      displayName: newUser.displayName, 
+      cursorColor: newUser.cursorColor 
+    };
     return {
       access_token: this.jwtService.sign(payload),
       user: {
         _id: newUser._id,
         email: newUser.email,
         displayName: newUser.displayName,
+        cursorColor: newUser.cursorColor
       }
     };
   }
@@ -63,14 +81,53 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    if (!user.cursorColor) {
+      user.cursorColor = this.getRandomColor();
+      await user.save();
+    }
+
     // Creado payload y firmado de token
-    const payload = { sub: user._id, email: user.email };
+    const payload = { 
+      sub: user._id, 
+      email: user.email, 
+      displayName: user.displayName, 
+      cursorColor: user.cursorColor 
+    };
     return {
       access_token: this.jwtService.sign(payload),
       user: {
         _id: user._id,
         email: user.email,
         displayName: user.displayName,
+        cursorColor: user.cursorColor
+      }
+    };
+  }
+
+  async updateProfile(userId: string, displayName: string, cursorColor: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    user.displayName = displayName;
+    user.cursorColor = cursorColor;
+    await user.save();
+
+    const payload = { 
+      sub: user._id, 
+      email: user.email, 
+      displayName: user.displayName, 
+      cursorColor: user.cursorColor 
+    };
+    
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        _id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        cursorColor: user.cursorColor
       }
     };
   }

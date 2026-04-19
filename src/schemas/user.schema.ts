@@ -12,6 +12,9 @@ export class User extends Document {
   @Prop()
   avatarUrl: string;
 
+  @Prop()
+  cursorColor: string;
+
   @Prop({ required: true })
   passwordHash: string;
 }
