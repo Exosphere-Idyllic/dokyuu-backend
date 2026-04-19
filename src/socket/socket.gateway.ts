@@ -23,6 +23,9 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: any) {
     console.log(`[Sockets] Cliente desconectado: ${client.id} (sala: ${client.currentBoardId ?? 'ninguna'})`);
+    if (client.currentBoardId && client.userId) {
+      this.server.to(client.currentBoardId).emit('user:left', { userId: client.userId, email: client.userEmail });
+    }
   }
 
   @UseGuards(WsAuthGuard)
@@ -43,9 +46,14 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     client.join(payload.boardId);
     client.currentBoardId = payload.boardId;
+    client.userId = client.user?.sub;
+    client.userEmail = client.user?.email;
 
     const roomSize = this.server.sockets.adapter.rooms.get(payload.boardId)?.size ?? 0;
     console.log(`[Sockets] ${client.id} (${client.user?.email}) → tablero ${payload.boardId}. Usuarios en sala: ${roomSize}`);
+
+    // Emit to others in the room
+    client.to(payload.boardId).emit('user:joined', { userId: client.userId, email: client.userEmail });
 
     return { success: true, message: 'Unido a la sala exitosamente', boardId: payload.boardId };
   }
