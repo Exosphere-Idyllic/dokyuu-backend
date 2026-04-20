@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { BoardsService } from './boards.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
@@ -26,5 +26,10 @@ export class BoardsController {
     @Body() updateBoardDto: UpdateBoardDto,
   ) {
     return this.boardsService.update(id, req.user._id, updateBoardDto);
+  }
+
+  @Delete(':id')
+  async remove(@Request() req, @Param('id') id: string) {
+    return this.boardsService.remove(id, req.user._id);
   }
 }

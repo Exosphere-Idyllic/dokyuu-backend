@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { nanoid } from 'nanoid';
 import { Board } from '../schemas/board.schema';
 import { BoardMember } from '../schemas/board-member.schema';
+import { BoardElement } from '../schemas/board-element.schema';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
@@ -13,6 +14,7 @@ export class BoardsService {
   constructor(
     @InjectModel(Board.name) private readonly boardModel: Model<Board>,
     @InjectModel(BoardMember.name) private readonly boardMemberModel: Model<BoardMember>,
+    @InjectModel(BoardElement.name) private readonly boardElementModel: Model<BoardElement>,
   ) {}
 
   private generateCode(): string {
@@ -85,5 +87,22 @@ export class BoardsService {
     }
 
     return await board.save();
+  }
+
+  async remove(boardId: string, userId: string | Types.ObjectId) {
+    const board = await this.boardModel.findById(boardId);
+    if (!board) {
+      throw new NotFoundException('Pizarra no encontrada');
+    }
+    
+    if (String(board.createdBy) !== String(userId)) {
+      throw new UnauthorizedException('Solo el propietario puede eliminar esta pizarra');
+    }
+
+    await this.boardElementModel.deleteMany({ boardId });
+    await this.boardMemberModel.deleteMany({ boardId });
+    await this.boardModel.findByIdAndDelete(boardId);
+    
+    return { success: true };
   }
 }
