@@ -106,7 +106,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Cargar historial de chat y enviarlo al usuario que acaba de entrar
     try {
       const history = await this.chatMessageModel
-        .find({ boardId: payload.boardId })
+        .find({ boardId: new Types.ObjectId(payload.boardId) })
         .sort({ createdAt: 1 })
         .limit(100)
         .populate('sender', 'displayName email')
