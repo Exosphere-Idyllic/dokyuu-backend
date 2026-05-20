@@ -11,6 +11,9 @@ import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
 import { WsAuthGuard } from '../auth/ws-auth.guard';
 import { WsRoleGuard } from './ws-role.guard';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { ChatMessage } from '../schemas/chat-message.schema';
 
 interface ConnectedUser {
   socketId: string;
@@ -24,6 +27,10 @@ interface ConnectedUser {
 export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
+
+  constructor(
+    @InjectModel(ChatMessage.name) private readonly chatMessageModel: Model<ChatMessage>,
+  ) {}
 
   // Mapa de usuarios conectados por sala: boardId -> ConnectedUser[]
   private roomUsers = new Map<string, ConnectedUser[]>();
@@ -96,7 +103,50 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Emitir lista actualizada de usuarios a TODA la sala (incluido el que acaba de entrar)
     this._emitRoomUsers(payload.boardId);
 
+    // Cargar historial de chat y enviarlo al usuario que acaba de entrar
+    try {
+      const history = await this.chatMessageModel
+        .find({ boardId: payload.boardId })
+        .sort({ createdAt: 1 })
+        .limit(100)
+        .populate('sender', 'displayName email')
+        .exec();
+      client.emit('chat:history', history);
+    } catch (err) {
+      console.error('[Sockets] Error cargando historial de chat:', err);
+    }
+
     return { success: true, message: 'Unido a la sala exitosamente', boardId: payload.boardId };
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage('chat:send')
+  async handleChatSend(
+    @ConnectedSocket() client: any,
+    @MessageBody() payload: { boardId: string; message: string }
+  ) {
+    if (!payload?.boardId || !payload?.message?.trim()) {
+      return { success: false, message: 'boardId y message son requeridos' };
+    }
+
+    try {
+      const messageDoc = new this.chatMessageModel({
+        boardId: new Types.ObjectId(payload.boardId),
+        sender: new Types.ObjectId(client.user?.sub),
+        message: payload.message.trim(),
+      });
+
+      const savedMessage = await messageDoc.save();
+      const populated = await savedMessage.populate('sender', 'displayName email');
+
+      // Emitir a toda la sala
+      this.server.to(payload.boardId).emit('chat:message', populated);
+
+      return { success: true };
+    } catch (err) {
+      console.error('[Sockets] Error al enviar mensaje de chat:', err);
+      return { success: false, message: 'Error interno al enviar mensaje' };
+    }
   }
 
   @UseGuards(WsAuthGuard, WsRoleGuard)
