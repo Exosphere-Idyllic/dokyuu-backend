@@ -1,4 +1,4 @@
-import { Controller, Post, UseInterceptors, UploadedFile, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, UseInterceptors, UploadedFile, UseGuards, BadRequestException, Request, Query, Body } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FilesService } from './files.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -18,20 +18,53 @@ export class FilesController {
       cb(null, true);
     }
   }))
-  async uploadImage(@UploadedFile() file: Express.Multer.File) {
+  async uploadImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req,
+    @Body('boardId') bodyBoardId?: string,
+    @Body('isPersonal') bodyIsPersonal?: string | boolean,
+    @Query('boardId') queryBoardId?: string,
+    @Query('isPersonal') queryIsPersonal?: string | boolean,
+  ) {
     if (!file) {
       throw new BadRequestException('No se encontró archivo. Envía el body como "form-data" con el campo "image".');
     }
 
-    const result = await this.filesService.uploadImage(file);
+    const boardId = bodyBoardId || queryBoardId;
+    const isPersonalRaw = bodyIsPersonal !== undefined ? bodyIsPersonal : queryIsPersonal;
+    let isPersonal = true;
+    if (isPersonalRaw !== undefined) {
+      isPersonal = isPersonalRaw === 'true' || isPersonalRaw === true;
+    }
+
+    const result = await this.filesService.uploadAndSaveImage(
+      file,
+      req.user._id.toString(),
+      boardId,
+      isPersonal,
+    );
 
     return {
       message: 'Imagen subida exitosamente',
-      url: result.secure_url,
-      publicId: result.public_id,
-      // Dimensiones reales de la imagen para posicionar el elemento correctamente en el canvas
+      id: result.id,
+      url: result.url,
+      publicId: result.publicId,
       width: result.width,
       height: result.height,
+      isPersonal: result.isPersonal,
+      boardId: result.boardId,
+      createdAt: result.createdAt,
     };
+  }
+
+  @Get('history')
+  async getHistory(
+    @Request() req,
+    @Query('boardId') boardId?: string,
+  ) {
+    return this.filesService.getImageHistory(
+      req.user._id.toString(),
+      boardId,
+    );
   }
 }
