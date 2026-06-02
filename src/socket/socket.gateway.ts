@@ -111,7 +111,23 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         .limit(100)
         .populate('sender', 'displayName email')
         .exec();
-      client.emit('chat:history', history);
+
+      const structuredHistory = history.map(msg => {
+        const senderObj = msg.sender as any;
+        return {
+          _id: msg._id,
+          boardId: msg.boardId,
+          message: msg.message,
+          createdAt: (msg as any).createdAt,
+          sender: {
+            _id: senderObj?._id || '',
+            displayName: senderObj?.displayName || '',
+            email: senderObj?.email || ''
+          }
+        };
+      });
+
+      client.emit('chat:history', structuredHistory);
     } catch (err) {
       console.error('[Sockets] Error cargando historial de chat:', err);
     }
@@ -120,8 +136,8 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @UseGuards(WsAuthGuard)
-  @SubscribeMessage('chat:send')
-  async handleChatSend(
+  @SubscribeMessage('chat:message')
+  async handleChatMessage(
     @ConnectedSocket() client: any,
     @MessageBody() payload: { boardId: string; message: string }
   ) {
@@ -138,9 +154,22 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const savedMessage = await messageDoc.save();
       const populated = await savedMessage.populate('sender', 'displayName email');
+      const senderObj = populated.sender as any;
+
+      const structuredMessage = {
+        _id: populated._id,
+        boardId: populated.boardId,
+        message: populated.message,
+        createdAt: (populated as any).createdAt,
+        sender: {
+          _id: senderObj?._id || client.user?.sub || '',
+          displayName: senderObj?.displayName || client.user?.displayName || '',
+          email: senderObj?.email || client.user?.email || ''
+        }
+      };
 
       // Emitir a toda la sala
-      this.server.to(payload.boardId).emit('chat:message', populated);
+      this.server.to(payload.boardId).emit('chat:message', structuredMessage);
 
       return { success: true };
     } catch (err) {
