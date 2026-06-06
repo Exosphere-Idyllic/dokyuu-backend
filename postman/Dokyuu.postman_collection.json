@@ -1,0 +1,551 @@
+{
+	"info": {
+		"_postman_id": "0d2024b1-ca5a-43b5-9f5e-149b29d18c1b",
+		"name": "Dokyuu API & WebSockets",
+		"description": "# Dokyuu Backend API & WebSockets\n\nColección de Postman para probar todos los endpoints y eventos del backend de Dokyuu.\n\n## Configuración de Autenticación\nEsta colección utiliza autenticación a nivel de colección (Bearer Token con la variable `{{jwt_token}}`).\n\n- Las peticiones de Registro, Login y Actualización de Perfil extraen automáticamente el `access_token` del cuerpo de la respuesta y actualizan la variable `jwt_token` de la colección.\n- Las demás peticiones HTTP heredan la autenticación automáticamente.\n\n## WebSockets (Socket.io)\nSe incluye una sección con las especificaciones de eventos para Socket.io. Al importar en Postman, puedes crear peticiones de tipo **Socket.io** apuntando a `{{wsUrl}}` enviando el token en la sección `Auth` o en la sección `Handshake` -> `Auth` -> `{ \"token\": \"{{jwt_token}}\" }`.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"description": "Endpoints relacionados con la autenticación de usuarios y actualización de perfil.",
+			"item": [
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.access_token) {",
+									"    pm.collectionVariables.set(\"jwt_token\", response.access_token);",
+									"    pm.test(\"Token JWT guardado automáticamente\", function () {",
+									"        pm.expect(response.access_token).to.be.a('string');",
+									"    });",
+									"}"
+								],
+								"type": "javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\",\n  \"displayName\": \"Usuario Demo\",\n  \"password\": \"contrasenia123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						},
+						"description": "Registra un nuevo usuario en la plataforma. Retorna el token JWT y los datos del usuario creado."
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.access_token) {",
+									"    pm.collectionVariables.set(\"jwt_token\", response.access_token);",
+									"    pm.test(\"Token JWT guardado automáticamente\", function () {",
+									"        pm.expect(response.access_token).to.be.a('string');",
+									"    });",
+									"}"
+								],
+								"type": "javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"contrasenia123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Inicia sesión con un correo y contraseña. Retorna el token JWT necesario para el resto de peticiones."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.access_token) {",
+									"    pm.collectionVariables.set(\"jwt_token\", response.access_token);",
+									"}"
+								],
+								"type": "javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"displayName\": \"Usuario Demo Modificado\",\n  \"cursorColor\": \"#FF5733\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"profile"
+							]
+						},
+						"description": "Actualiza el perfil del usuario autenticado (nombre en pantalla y color de cursor)."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Boards",
+			"description": "Operaciones CRUD sobre las pizarras (Boards) del usuario.",
+			"item": [
+				{
+					"name": "Create Board",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Mi Nueva Pizarra\",\n  \"description\": \"Pizarra para diseño de arquitectura\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/boards",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"boards"
+							]
+						},
+						"description": "Crea una nueva pizarra y asigna al usuario autenticado como host/creador."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Boards",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/boards",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"boards"
+							]
+						},
+						"description": "Obtiene la lista de todas las pizarras creadas por el usuario o en las que participa como miembro."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Board",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Pizarra Nombre Actualizado\",\n  \"description\": \"Descripción actualizada de la pizarra\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/boards/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"boards",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "ID_DE_LA_PIZARRA",
+									"description": "El ID de la pizarra a actualizar"
+								}
+							]
+						},
+						"description": "Actualiza el nombre o la descripción de una pizarra. Solo permitido para el host/creador."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Board",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/boards/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"boards",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "ID_DE_LA_PIZARRA",
+									"description": "El ID de la pizarra a eliminar"
+								}
+							]
+						},
+						"description": "Elimina una pizarra por completo. Solo permitido para el host/creador."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Canvas",
+			"description": "Endpoints relacionados con la persistencia de elementos en la pizarra.",
+			"item": [
+				{
+					"name": "Get Canvas Elements",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/canvas/:boardId/elements",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"canvas",
+								":boardId",
+								"elements"
+							],
+							"variable": [
+								{
+									"key": "boardId",
+									"value": "ID_DE_LA_PIZARRA",
+									"description": "ID de la pizarra de la cual recuperar elementos"
+								}
+							]
+						},
+						"description": "Obtiene la lista actual de elementos dibujados en la pizarra (rectángulos, líneas, círculos, etc.)."
+					},
+					"response": []
+				},
+				{
+					"name": "Save Canvas Elements",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"elements\": [\n    {\n      \"id\": \"element-unique-uuid-1\",\n      \"type\": \"rectangle\",\n      \"x\": 100,\n      \"y\": 150,\n      \"width\": 200,\n      \"height\": 100,\n      \"color\": \"#4F46E5\",\n      \"strokeWidth\": 2\n    },\n    {\n      \"id\": \"element-unique-uuid-2\",\n      \"type\": \"circle\",\n      \"x\": 300,\n      \"y\": 200,\n      \"radius\": 50,\n      \"color\": \"#EF4444\",\n      \"strokeWidth\": 2\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/canvas/:boardId/elements",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"canvas",
+								":boardId",
+								"elements"
+							],
+							"variable": [
+								{
+									"key": "boardId",
+									"value": "ID_DE_LA_PIZARRA",
+									"description": "ID de la pizarra donde guardar elementos"
+								}
+							]
+						},
+						"description": "Guarda el estado completo de los elementos del canvas en la base de datos."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Files",
+			"description": "Subida de archivos y consulta de historial de imágenes.",
+			"item": [
+				{
+					"name": "Upload Image",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "image",
+									"type": "file",
+									"src": [],
+									"description": "Archivo de imagen a subir (JPG, PNG, GIF, WEBP, SVG). Máximo 8MB."
+								},
+								{
+									"key": "boardId",
+									"value": "ID_DE_LA_PIZARRA_OPCIONAL",
+									"type": "text",
+									"description": "ID de la pizarra (opcional si es personal)"
+								},
+								{
+									"key": "isPersonal",
+									"value": "true",
+									"type": "text",
+									"description": "Indica si la imagen se guarda en biblioteca personal ('true' o 'false')"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files/upload",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								"upload"
+							]
+						},
+						"description": "Sube una imagen a Cloudinary y la registra en la base de datos vinculándola al usuario y opcionalmente a una pizarra."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Upload History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/history?boardId=ID_DE_LA_PIZARRA_OPCIONAL",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								"history"
+							],
+							"query": [
+								{
+									"key": "boardId",
+									"value": "ID_DE_LA_PIZARRA_OPCIONAL",
+									"description": "ID del tablero para filtrar imágenes asociadas"
+								}
+							]
+						},
+						"description": "Obtiene la lista histórica de imágenes subidas por el usuario, filtrando opcionalmente por tablero."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Members",
+			"description": "Gestión de participantes y miembros de la pizarra.",
+			"item": [
+				{
+					"name": "Join Board by Code",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"CODIGO_DE_INVITACION\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/members/join",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"members",
+								"join"
+							]
+						},
+						"description": "Permite a un usuario unirse a una pizarra usando el código de invitación único de esta."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "WebSockets (Socket.io Events)",
+			"description": "Eventos de Socket.io que se pueden probar en Postman (Creando una petición Socket.io).\nApuntar a: `{{wsUrl}}`.\nHandshake Auth: `{ \"token\": \"{{jwt_token}}\" }`.",
+			"item": [
+				{
+					"name": "1. Event - joinBoard [EMIT]",
+					"protocol": "socketio",
+					"request": {
+						"url": {
+							"raw": "{{wsUrl}}",
+							"host": [
+								"{{wsUrl}}"
+							]
+						},
+						"description": "Evento para unirse a la sala de una pizarra.\n\n**Nombre del evento:** `joinBoard`\n**Payload (JSON):**\n```json\n{\n  \"boardId\": \"ID_DE_LA_PIZARRA\"\n}\n```\n\n**Respuestas / Emisiones provocadas:**\n- `chat:history` (Emite al cliente que entra la lista de mensajes de chat recientes).\n- `user:joined` (Emite a los demás miembros en la sala notando el ingreso).\n- `room:users` (Emite a toda la sala la lista actualizada de usuarios conectados)."
+					}
+				},
+				{
+					"name": "2. Event - chat:message [EMIT & LISTEN]",
+					"protocol": "socketio",
+					"request": {
+						"url": {
+							"raw": "{{wsUrl}}",
+							"host": [
+								"{{wsUrl}}"
+							]
+						},
+						"description": "Envía un mensaje de chat a la pizarra en tiempo real.\n\n**Nombre del evento:** `chat:message`\n**Payload (JSON):**\n```json\n{\n  \"boardId\": \"ID_DE_LA_PIZARRA\",\n  \"message\": \"¡Hola a todos!\"\n}\n```\n\n**Respuestas / Emisiones provocadas:**\n- `chat:message` (Emite a todos los clientes en la sala el mensaje estructurado con datos del remitente)."
+					}
+				},
+				{
+					"name": "3. Event - canvas:update [EMIT & LISTEN]",
+					"protocol": "socketio",
+					"request": {
+						"url": {
+							"raw": "{{wsUrl}}",
+							"host": [
+								"{{wsUrl}}"
+							]
+						},
+						"description": "Transmite cambios de trazos y elementos gráficos al resto de usuarios.\n\n**Nombre del evento:** `canvas:update`\n**Payload (JSON):**\n```json\n{\n  \"boardId\": \"ID_DE_LA_PIZARRA\",\n  \"elements\": [\n    {\n      \"id\": \"element-unique-uuid-1\",\n      \"type\": \"rectangle\",\n      \"x\": 120,\n      \"y\": 180,\n      \"width\": 200,\n      \"height\": 100,\n      \"color\": \"#4F46E5\"\n    }\n  ]\n}\n```\n\n**Respuestas / Emisiones provocadas:**\n- `canvas:update` (Re-emite la lista completa de elementos al resto de los participantes en la sala)."
+					}
+				},
+				{
+					"name": "4. Event - cursor:move [EMIT & LISTEN]",
+					"protocol": "socketio",
+					"request": {
+						"url": {
+							"raw": "{{wsUrl}}",
+							"host": [
+								"{{wsUrl}}"
+							]
+						},
+						"description": "Transmite la posición en vivo del cursor del usuario.\n\n**Nombre del evento:** `cursor:move`\n**Payload (JSON):**\n```json\n{\n  \"boardId\": \"ID_DE_LA_PIZARRA\",\n  \"position\": {\n    \"x\": 450.5,\n    \"y\": 230.1\n  }\n}\n```\n\n**Respuestas / Emisiones provocadas:**\n- `cursor:move` (Difunde al resto de usuarios en la sala los datos del cursor, incluyendo displayName, color y posición)."
+					}
+				},
+				{
+					"name": "5. Event - kick:user [EMIT]",
+					"protocol": "socketio",
+					"request": {
+						"url": {
+							"raw": "{{wsUrl}}",
+							"host": [
+								"{{wsUrl}}"
+							]
+						},
+						"description": "Permite al host expulsar a un usuario específico en tiempo real.\n\n**Nombre del evento:** `kick:user`\n**Payload (JSON):**\n```json\n{\n  \"boardId\": \"ID_DE_LA_PIZARRA\",\n  \"targetUserId\": \"ID_DEL_USUARIO_A_EXPULSAR\"\n}\n```\n\n**Respuestas / Emisiones provocadas:**\n- `kicked` (Emite directamente al cliente objetivo informándole su expulsión).\n- `user:left` (Notifica a los demás de la desconexión del usuario).\n- `room:users` (Actualiza la lista de usuarios en línea de la sala)."
+					}
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "jwt_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
