@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import databaseConfig from './config/database';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -9,16 +10,18 @@ import { MembersModule } from './members/members.module';
 import { CanvasModule } from './canvas/canvas.module';
 import { FilesModule } from './files/files.module';
 import { SocketModule } from './socket/socket.module';
+import { TasksModule } from './tasks/tasks.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      load: [databaseConfig],
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
+        uri: configService.get<string>('database.uri'),
       }),
       inject: [ConfigService],
     }),
@@ -27,7 +30,8 @@ import { SocketModule } from './socket/socket.module';
     MembersModule, 
     CanvasModule, 
     FilesModule,
-    SocketModule
+    SocketModule,
+    TasksModule
   ],
   controllers: [AppController],
   providers: [AppService],

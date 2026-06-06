@@ -440,6 +440,144 @@
 			]
 		},
 		{
+			"name": "Tasks",
+			"description": "Operaciones CRUD sobre las tareas (Tasks) del usuario.",
+			"item": [
+				{
+					"name": "Create Task",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Mi Nueva Tarea\",\n  \"description\": \"Esta es una descripción detallada de la tarea\",\n  \"status\": \"pending\",\n  \"dueDate\": \"2026-12-31T23:59:59.999Z\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/tasks",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks"
+							]
+						},
+						"description": "Crea una nueva tarea para el usuario autenticado."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Tasks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/tasks",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks"
+							]
+						},
+						"description": "Obtiene la lista de todas las tareas creadas por el usuario autenticado."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/tasks/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "ID_DE_LA_TAREA",
+									"description": "El ID de la tarea a recuperar"
+								}
+							]
+						},
+						"description": "Recupera los detalles de una tarea específica del usuario."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Task",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Título de Tarea Modificado\",\n  \"status\": \"in-progress\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/tasks/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "ID_DE_LA_TAREA",
+									"description": "El ID de la tarea a actualizar"
+								}
+							]
+						},
+						"description": "Actualiza una tarea existente del usuario."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Task",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/tasks/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "ID_DE_LA_TAREA",
+									"description": "El ID de la tarea a eliminar"
+								}
+							]
+						},
+						"description": "Elimina una tarea específica del usuario."
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "WebSockets (Socket.io Events)",
 			"description": "Eventos de Socket.io que se pueden probar en Postman (Creando una petición Socket.io).\nApuntar a: `{{wsUrl}}`.\nHandshake Auth: `{ \"token\": \"{{jwt_token}}\" }`.",
 			"item": [
