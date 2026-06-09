@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsDateString, IsIn } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
@@ -10,13 +10,6 @@ export class CreateTaskDto {
   description?: string;
 
   @IsString()
-  @IsOptional()
-  @IsIn(['pending', 'in-progress', 'completed'], {
-    message: 'El estado debe ser pending, in-progress o completed',
-  })
-  status?: string;
-
-  @IsDateString({}, { message: 'La fecha de vencimiento debe ser una fecha válida' })
-  @IsOptional()
-  dueDate?: string;
+  @IsNotEmpty({ message: 'El ID de la persona asignada es obligatorio' })
+  assignedTo: string;
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Patch } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -6,22 +6,40 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
-export class TareaController {
-  constructor(private readonly tasksService: TasksService) { }
+export class TasksController {
+  constructor(private readonly tasksService: TasksService) {}
 
-  @Post()
-  async create(@Request() req, @Body() createTaskDto: CreateTaskDto) {
-    return this.tasksService.create(req.user._id, createTaskDto);
+  @Post('board/:boardId')
+  async create(
+    @Request() req,
+    @Param('boardId') boardId: string,
+    @Body() createTaskDto: CreateTaskDto,
+  ) {
+    return this.tasksService.createForBoard(req.user._id, boardId, createTaskDto);
   }
 
-  @Get()
-  async findAll(@Request() req) {
-    return this.tasksService.findAllForUser(req.user._id);
+  @Get('board/:boardId')
+  async findAllForBoard(@Request() req, @Param('boardId') boardId: string) {
+    return this.tasksService.findAllForBoard(boardId, req.user._id);
   }
 
-  @Get(':id')
-  async findOne(@Request() req, @Param('id') id: string) {
-    return this.tasksService.findOne(id, req.user._id);
+  @Get('my/:boardId')
+  async findMyTasks(@Request() req, @Param('boardId') boardId: string) {
+    return this.tasksService.findMyTasksInBoard(req.user._id, boardId);
+  }
+
+  @Patch(':id/complete')
+  async complete(@Request() req, @Param('id') id: string) {
+    return this.tasksService.completeTask(id, req.user._id);
+  }
+
+  @Patch(':id/elements')
+  async addElement(
+    @Request() req,
+    @Param('id') id: string,
+    @Body('elementId') elementId: string,
+  ) {
+    return this.tasksService.addElementToTask(id, elementId, req.user._id);
   }
 
   @Put(':id')

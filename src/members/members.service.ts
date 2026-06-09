@@ -50,4 +50,10 @@ export class MembersService {
       boardName: board.name
     };
   }
+
+  async getBoardMembers(boardId: string) {
+    return this.boardMemberModel.find({ boardId: new Types.ObjectId(boardId) })
+      .populate('userId', 'displayName email')
+      .exec();
+  }
 }

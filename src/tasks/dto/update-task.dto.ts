@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsDateString, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsArray } from 'class-validator';
 
 export class UpdateTaskDto {
   @IsString()
@@ -11,12 +11,12 @@ export class UpdateTaskDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(['pending', 'in-progress', 'completed'], {
-    message: 'El estado debe ser pending, in-progress o completed',
+  @IsIn(['active', 'completed'], {
+    message: 'El estado debe ser active o completed',
   })
   status?: string;
 
-  @IsDateString({}, { message: 'La fecha de vencimiento debe ser una fecha válida' })
+  @IsArray()
   @IsOptional()
-  dueDate?: string;
+  elementIds?: string[];
 }

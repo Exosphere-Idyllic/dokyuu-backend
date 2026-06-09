@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Param } from '@nestjs/common';
 import { MembersService } from './members.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -10,5 +10,10 @@ export class MembersController {
   @Post('join')
   async joinBoard(@Request() req, @Body('code') code: string) {
     return this.membersService.joinBoardByCode(req.user._id, code);
+  }
+
+  @Get('board/:boardId')
+  async getMembers(@Param('boardId') boardId: string) {
+    return this.membersService.getBoardMembers(boardId);
   }
 }
