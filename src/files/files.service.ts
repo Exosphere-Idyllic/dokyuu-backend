@@ -102,23 +102,21 @@ export class FilesService {
       }
     }
 
-    // 1. Buscar imágenes personales subidas por el usuario
+    // 1. Buscar imágenes personales subidas por el usuario (todas las imágenes del usuario)
     const personalImages = await this.uploadedImageModel
       .find({
         uploadedBy: userObjId,
-        isPersonal: true,
       })
       .sort({ createdAt: -1 })
       .exec();
 
-    // 2. Buscar imágenes de pizarra si se proporciona boardId
+    // 2. Buscar imágenes de pizarra si se proporciona boardId (todas las imágenes de la pizarra)
     let boardImages: any[] = [];
     if (boardId) {
       const boardObjId = new Types.ObjectId(boardId);
       boardImages = await this.uploadedImageModel
         .find({
           boardId: boardObjId,
-          isPersonal: false,
         })
         .sort({ createdAt: -1 })
         .exec();

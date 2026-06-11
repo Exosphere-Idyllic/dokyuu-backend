@@ -14,6 +14,7 @@ import { WsRoleGuard } from './ws-role.guard';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ChatMessage } from '../schemas/chat-message.schema';
+import { BoardMember } from '../schemas/board-member.schema';
 
 interface ConnectedUser {
   socketId: string;
@@ -30,6 +31,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     @InjectModel(ChatMessage.name) private readonly chatMessageModel: Model<ChatMessage>,
+    @InjectModel(BoardMember.name) private readonly boardMemberModel: Model<BoardMember>,
   ) {}
 
   // Mapa de usuarios conectados por sala: boardId -> ConnectedUser[]
@@ -106,24 +108,39 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Cargar historial de chat y enviarlo al usuario que acaba de entrar
     try {
       const history = await this.chatMessageModel
-        .find({ boardId: new Types.ObjectId(payload.boardId) })
+        .find({
+          boardId: new Types.ObjectId(payload.boardId),
+          $or: [
+            { isPrivate: { $ne: true } },
+            { sender: new Types.ObjectId(client.userId) },
+            { recipient: new Types.ObjectId(client.userId) }
+          ]
+        })
         .sort({ createdAt: 1 })
         .limit(100)
         .populate('sender', 'displayName email')
+        .populate('recipient', 'displayName email')
         .exec();
 
       const structuredHistory = history.map(msg => {
         const senderObj = msg.sender as any;
+        const recipientObj = msg.recipient as any;
         return {
           _id: msg._id,
           boardId: msg.boardId,
           message: msg.message,
           createdAt: (msg as any).createdAt,
+          isPrivate: msg.isPrivate || false,
           sender: {
             _id: senderObj?._id || '',
             displayName: senderObj?.displayName || '',
             email: senderObj?.email || ''
-          }
+          },
+          recipient: recipientObj ? {
+            _id: recipientObj?._id || '',
+            displayName: recipientObj?.displayName || '',
+            email: recipientObj?.email || ''
+          } : undefined
         };
       });
 
@@ -139,37 +156,152 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('chat:message')
   async handleChatMessage(
     @ConnectedSocket() client: any,
-    @MessageBody() payload: { boardId: string; message: string }
+    @MessageBody() payload: { boardId: string; message: string; recipientId?: string; isPrivate?: boolean | string }
   ) {
     if (!payload?.boardId || !payload?.message?.trim()) {
       return { success: false, message: 'boardId y message son requeridos' };
+    }
+
+    const rawMessage = payload.message.trim();
+
+    // 1. Detectar comandos de break time (sólo host)
+    if (rawMessage.match(/^\/break\s+time\s+(stop|end|off|cancel)/i)) {
+      try {
+        const boardObjId = new Types.ObjectId(payload.boardId);
+        const userObjId = new Types.ObjectId(client.user?.sub);
+        const member = await this.boardMemberModel.findOne({ boardId: boardObjId, userId: userObjId }).exec();
+        if (member && member.role === 'host') {
+          this.server.to(payload.boardId).emit('board:break', { duration: 0, endTime: 0 });
+          return { success: true };
+        } else {
+          client.emit('chat:message', {
+            _id: new Types.ObjectId().toString(),
+            boardId: payload.boardId,
+            message: 'Solo el host puede cancelar el tiempo de descanso.',
+            createdAt: new Date().toISOString(),
+            isPrivate: true,
+            sender: { _id: 'system', displayName: 'Sistema', email: 'system@dokyuu.com' }
+          });
+          return { success: false, message: 'No autorizado' };
+        }
+      } catch (err) {
+        console.error('[Sockets] Error en break time stop:', err);
+        return { success: false };
+      }
+    }
+
+    const breakMatch = rawMessage.match(/^\/break\s+time\s+(\d+)(s|m)?/i);
+    if (breakMatch) {
+      try {
+        const boardObjId = new Types.ObjectId(payload.boardId);
+        const userObjId = new Types.ObjectId(client.user?.sub);
+        const member = await this.boardMemberModel.findOne({ boardId: boardObjId, userId: userObjId }).exec();
+        if (member && member.role === 'host') {
+          const val = parseInt(breakMatch[1], 10);
+          const unit = breakMatch[2] || 'm';
+          const durationSeconds = unit === 's' ? val : val * 60;
+          const endTime = Date.now() + durationSeconds * 1000;
+
+          this.server.to(payload.boardId).emit('board:break', {
+            duration: durationSeconds,
+            endTime,
+            initiatedBy: client.user?.displayName || client.user?.email.split('@')[0]
+          });
+          return { success: true };
+        } else {
+          client.emit('chat:message', {
+            _id: new Types.ObjectId().toString(),
+            boardId: payload.boardId,
+            message: 'Solo el host puede definir un tiempo de descanso (/break time).',
+            createdAt: new Date().toISOString(),
+            isPrivate: true,
+            sender: { _id: 'system', displayName: 'Sistema', email: 'system@dokyuu.com' }
+          });
+          return { success: false, message: 'No autorizado' };
+        }
+      } catch (err) {
+        console.error('[Sockets] Error en break time:', err);
+        return { success: false };
+      }
+    }
+
+    // 2. Procesar mensaje de chat regular o privado
+    let recipientId = payload.recipientId;
+    let isPrivate = payload.isPrivate === true || payload.isPrivate === 'true';
+    let finalMessage = rawMessage;
+
+    // Parseo de comandos /w, /msg o /pm en el propio texto del mensaje
+    const whisperMatch = rawMessage.match(/^\/(w|msg|pm)\s+@([^\s]+)\s+(.+)$/i);
+    if (whisperMatch) {
+      const targetUsername = whisperMatch[2].toLowerCase();
+      const actualMsg = whisperMatch[3];
+      
+      const roomUserList = this.roomUsers.get(payload.boardId) ?? [];
+      const foundUser = roomUserList.find(u => 
+        (u.displayName && u.displayName.toLowerCase().replace(/\s+/g, '') === targetUsername) ||
+        u.email.split('@')[0].toLowerCase() === targetUsername
+      );
+      if (foundUser) {
+        recipientId = foundUser.userId;
+        isPrivate = true;
+        finalMessage = actualMsg;
+      }
     }
 
     try {
       const messageDoc = new this.chatMessageModel({
         boardId: new Types.ObjectId(payload.boardId),
         sender: new Types.ObjectId(client.user?.sub),
-        message: payload.message.trim(),
+        recipient: isPrivate && recipientId ? new Types.ObjectId(recipientId) : undefined,
+        isPrivate: isPrivate && !!recipientId,
+        message: finalMessage,
       });
 
       const savedMessage = await messageDoc.save();
-      const populated = await savedMessage.populate('sender', 'displayName email');
+      const populated = await savedMessage.populate([
+        { path: 'sender', select: 'displayName email' },
+        { path: 'recipient', select: 'displayName email' }
+      ]);
       const senderObj = populated.sender as any;
+      const recipientObj = populated.recipient as any;
 
       const structuredMessage = {
         _id: populated._id,
         boardId: populated.boardId,
         message: populated.message,
         createdAt: (populated as any).createdAt,
+        isPrivate: populated.isPrivate,
         sender: {
           _id: senderObj?._id || client.user?.sub || '',
           displayName: senderObj?.displayName || client.user?.displayName || '',
           email: senderObj?.email || client.user?.email || ''
-        }
+        },
+        recipient: recipientObj ? {
+          _id: recipientObj?._id || '',
+          displayName: recipientObj?.displayName || '',
+          email: recipientObj?.email || ''
+        } : undefined
       };
 
-      // Emitir a toda la sala
-      this.server.to(payload.boardId).emit('chat:message', structuredMessage);
+      if (populated.isPrivate && populated.recipient) {
+        // Enviar solo al remitente y destinatario
+        const roomUserList = this.roomUsers.get(payload.boardId) ?? [];
+        
+        // Sockets del destinatario
+        const recipientUsers = roomUserList.filter(u => u.userId === recipientId);
+        for (const ru of recipientUsers) {
+          this.server.to(ru.socketId).emit('chat:message', structuredMessage);
+        }
+        
+        // Sockets del remitente
+        const senderUsers = roomUserList.filter(u => u.userId === client.user?.sub);
+        for (const su of senderUsers) {
+          this.server.to(su.socketId).emit('chat:message', structuredMessage);
+        }
+      } else {
+        // Mensaje público: emitir a toda la sala
+        this.server.to(payload.boardId).emit('chat:message', structuredMessage);
+      }
 
       return { success: true };
     } catch (err) {

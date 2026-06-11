@@ -11,6 +11,12 @@ export class ChatMessage extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   sender: User | Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false, index: true })
+  recipient?: User | Types.ObjectId;
+
+  @Prop({ required: true, default: false })
+  isPrivate: boolean;
+
   @Prop({ required: true })
   message: string;
 }
