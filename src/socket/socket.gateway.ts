@@ -24,6 +24,14 @@ interface ConnectedUser {
   cursorColor: string;
 }
 
+interface LockInfo {
+  userId: string;
+  displayName: string;
+  email: string;
+  color: string;
+  boardId: string;
+}
+
 @WebSocketGateway({ cors: { origin: '*' } })
 export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -37,12 +45,34 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Mapa de usuarios conectados por sala: boardId -> ConnectedUser[]
   private roomUsers = new Map<string, ConnectedUser[]>();
 
+  // Mapa de bloqueos de elementos: elementId -> LockInfo
+  private lockedElements = new Map<string, LockInfo>();
+
+  // Estado canónico del canvas por sala: boardId -> elementos[]
+  private boardState = new Map<string, any[]>();
+
   handleConnection(client: any) {
     console.log(`[Sockets] Cliente conectado: ${client.id}`);
   }
 
   handleDisconnect(client: any) {
     console.log(`[Sockets] Cliente desconectado: ${client.id} (sala: ${client.currentBoardId ?? 'ninguna'})`);
+
+    // Liberar todos los locks del usuario desconectado
+    if (client.userId && client.currentBoardId) {
+      const releasedLocks: string[] = [];
+      for (const [elementId, lock] of this.lockedElements.entries()) {
+        if (lock.userId === client.userId && lock.boardId === client.currentBoardId) {
+          this.lockedElements.delete(elementId);
+          releasedLocks.push(elementId);
+        }
+      }
+      if (releasedLocks.length > 0) {
+        console.log(`[Sockets] Liberando ${releasedLocks.length} locks de ${client.userEmail}`);
+        this.server.to(client.currentBoardId).emit('element:unlock', { elementIds: releasedLocks });
+      }
+    }
+
     if (client.currentBoardId && client.userId) {
       this._removeUserFromRoom(client.currentBoardId, client.id);
 
@@ -69,6 +99,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Salir de sala anterior
     if (client.currentBoardId && client.currentBoardId !== payload.boardId) {
+      this._releaseLocksForUser(client.userId, client.currentBoardId);
       this._removeUserFromRoom(client.currentBoardId, client.id);
       client.leave(client.currentBoardId);
       this._emitRoomUsers(client.currentBoardId);
@@ -104,6 +135,23 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Emitir lista actualizada de usuarios a TODA la sala (incluido el que acaba de entrar)
     this._emitRoomUsers(payload.boardId);
+
+    // Enviar estado canónico en memoria al usuario que entra (si existe)
+    const cachedState = this.boardState.get(payload.boardId);
+    if (cachedState) {
+      client.emit('canvas:update', cachedState);
+    }
+
+    // Enviar locks activos al usuario que entra
+    const activeLocks: Record<string, any> = {};
+    for (const [elementId, lock] of this.lockedElements.entries()) {
+      if (lock.boardId === payload.boardId) {
+        activeLocks[elementId] = lock;
+      }
+    }
+    if (Object.keys(activeLocks).length > 0) {
+      client.emit('element:locks:current', activeLocks);
+    }
 
     // Cargar historial de chat y enviarlo al usuario que acaba de entrar
     try {
@@ -328,9 +376,121 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.currentBoardId = payload.boardId;
     }
 
-    console.log(`[Sockets] canvas:update | sala: ${payload.boardId} | user: ${client.user?.email} | elementos: ${payload.elements.length}`);
+    // ── Merge inteligente respetando locks ──────────────────────────────────
+    const incoming = payload.elements;
+    const current = this.boardState.get(payload.boardId) ?? [];
 
-    client.to(payload.boardId).emit('canvas:update', payload.elements);
+    // Construir mapa del estado actual para lookup rápido
+    const currentMap = new Map<string, any>();
+    for (const el of current) {
+      currentMap.set(el.id, el);
+    }
+
+    // Construir mapa del estado entrante
+    const incomingMap = new Map<string, any>();
+    for (const el of incoming) {
+      incomingMap.set(el.id, el);
+    }
+
+    // Resultado del merge
+    const merged: any[] = [];
+
+    // 1. Procesar elementos entrantes
+    for (const el of incoming) {
+      const lock = this.lockedElements.get(el.id);
+      if (lock && lock.userId !== client.user?.sub) {
+        // Elemento bloqueado por OTRO usuario — preservar versión actual
+        const preserved = currentMap.get(el.id);
+        if (preserved) {
+          merged.push(preserved);
+        } else {
+          // No existe en estado actual, agregar igualmente (elemento nuevo)
+          merged.push(el);
+        }
+      } else {
+        // Sin lock o bloqueado por el emisor — aplicar cambio
+        merged.push(el);
+      }
+    }
+
+    // 2. Preservar elementos que el emisor eliminó pero que están bloqueados por otro
+    for (const el of current) {
+      if (!incomingMap.has(el.id)) {
+        const lock = this.lockedElements.get(el.id);
+        if (lock && lock.userId !== client.user?.sub) {
+          // Elemento eliminado pero bloqueado por otro — preservarlo
+          merged.push(el);
+        }
+        // Si no está bloqueado, se permite la eliminación (no se agrega)
+      }
+    }
+
+    // Actualizar estado canónico
+    this.boardState.set(payload.boardId, merged);
+
+    console.log(`[Sockets] canvas:update | sala: ${payload.boardId} | user: ${client.user?.email} | elementos: ${merged.length}`);
+
+    // Emitir el estado mergeado a TODA la sala (incluido el emisor para sincronizar)
+    this.server.to(payload.boardId).emit('canvas:update', merged);
+  }
+
+  // ── Bloqueo de elementos ─────────────────────────────────────────────────
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage('element:lock')
+  handleElementLock(
+    @ConnectedSocket() client: any,
+    @MessageBody() payload: { boardId: string; elementId: string }
+  ) {
+    if (!payload?.boardId || !payload?.elementId) return;
+
+    const existingLock = this.lockedElements.get(payload.elementId);
+    // Solo permitir si no está bloqueado por otro o si es el mismo usuario
+    if (existingLock && existingLock.userId !== client.user?.sub) {
+      return { success: false, lockedBy: existingLock };
+    }
+
+    const lockInfo: LockInfo = {
+      userId: client.user?.sub,
+      displayName: client.user?.displayName || client.user?.email?.split('@')[0] || '',
+      email: client.user?.email || '',
+      color: client.userCursorColor || '#4F46E5',
+      boardId: payload.boardId,
+    };
+
+    this.lockedElements.set(payload.elementId, lockInfo);
+
+    // Notificar a los DEMÁS usuarios de la sala
+    client.to(payload.boardId).emit('element:lock', {
+      elementId: payload.elementId,
+      lock: lockInfo,
+    });
+
+    return { success: true };
+  }
+
+  @UseGuards(WsAuthGuard)
+  @SubscribeMessage('element:unlock')
+  handleElementUnlock(
+    @ConnectedSocket() client: any,
+    @MessageBody() payload: { boardId: string; elementId: string }
+  ) {
+    if (!payload?.boardId || !payload?.elementId) return;
+
+    const existingLock = this.lockedElements.get(payload.elementId);
+    // Solo el dueño del lock puede liberarlo
+    if (!existingLock || existingLock.userId !== client.user?.sub) {
+      return { success: false };
+    }
+
+    this.lockedElements.delete(payload.elementId);
+
+    // Notificar a los DEMÁS usuarios
+    client.to(payload.boardId).emit('element:unlock', {
+      elementIds: [payload.elementId],
+    });
+
+    return { success: true };
   }
 
   @UseGuards(WsAuthGuard)
@@ -394,6 +554,9 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     console.log(`[Sockets] KICK: ${client.userEmail} expulsa a ${targetUser.email} del tablero ${payload.boardId}`);
 
+    // Liberar locks del usuario expulsado
+    this._releaseLocksForUser(payload.targetUserId, payload.boardId);
+
     // Notificar al usuario expulsado
     targetSocket.emit('kicked', {
       boardId: payload.boardId,
@@ -450,5 +613,18 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const users = this.roomUsers.get(boardId) ?? [];
     // Emitir a toda la sala la lista actualizada
     this.server.to(boardId).emit('room:users', users);
+  }
+
+  private _releaseLocksForUser(userId: string, boardId: string) {
+    const releasedLocks: string[] = [];
+    for (const [elementId, lock] of this.lockedElements.entries()) {
+      if (lock.userId === userId && lock.boardId === boardId) {
+        this.lockedElements.delete(elementId);
+        releasedLocks.push(elementId);
+      }
+    }
+    if (releasedLocks.length > 0) {
+      this.server.to(boardId).emit('element:unlock', { elementIds: releasedLocks });
+    }
   }
 }
